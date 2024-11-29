@@ -1,37 +1,53 @@
-name: Publish 🚀
+name: Build and deploy ASP.Net Core app to Azure Web App - DevOps
 
 on:
-  workflow_dispatch:
   push:
     branches:
-    - master
-
-env:
-  AZURE_WEBAPP_NAME: Uppgift3-MolnUtveckling
-  AZURE_WEBAPP_PACKAGE_PATH: "./publish"
+      - main
+  workflow_dispatch:
 
 jobs:
-  publish:
+  build:
     runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'
+
+      - name: Build with dotnet
+        run: dotnet build --configuration Release
+
+      - name: dotnet publish
+        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/Uppgift3-MolnUtveckling"
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: .net-app
+          path: ${{env.DOTNET_ROOT}}/myapp
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     
     steps:
-      - uses: actions/checkout@v3
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: .net-app
       
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
         with:
-          dotnet-version: '8.0.x'
-          
-        
-      - name: Build
-        run: dotnet build .Uppgift3-MolnUtveckling --configuration Release 
-        
-      - name: Publish
-        run: dotnet publish .Uppgift3-MolnUtveckling --configuration Release --no-build --output '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}'
-        
-      - name: Deployment
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          app-name: 'Uppgift3-MolnUtveckling'
+          slot-name: 'Production'
+          package: .
           publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE }}
-          package: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
